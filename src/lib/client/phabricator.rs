@@ -55,7 +55,7 @@ impl PhabricatorClient {
 
       return Ok(tasks);
     } else {
-      panic!("WOI");
+      panic!("Cannot parse {}", &body);
     }
   }
 }
