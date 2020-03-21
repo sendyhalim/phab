@@ -52,10 +52,18 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
 
     for task in &tasks {
+      let board_name = task
+        .board
+        .as_ref()
+        .map(|b| b.name.clone())
+        .or({ Some(String::from("NoBoard")) })
+        .unwrap();
+
       println!(
-        "[{} - P: {}] {}",
-        task.board.name,
+        "[T{} point: {} - {}] {}",
+        task.id,
         task.point.or(Some(0)).unwrap(),
+        board_name,
         task.name,
       );
     }

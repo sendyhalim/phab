@@ -61,52 +61,74 @@ impl PhabricatorClient {
 }
 
 pub struct Task {
-  // pub id: u64,
+  pub id: u64,
   pub task_type: String,
   pub phid: String,
   pub name: String,
   pub description: String,
   pub author_phid: String,
-  pub owner_phid: String, // Assigned
+  pub owner_phid: Option<String>, // Assigned
   pub status: String,
   pub priority: String,
   pub point: Option<u64>,
-  pub project_phid: String,
-  pub board: Board,
+  pub project_phids: Vec<String>,
+  pub board: Option<Board>,
   pub created_at: u64,
   pub updated_at: u64,
 }
 
 impl Task {
   pub fn from_json(v: &Value) -> Task {
-    let project_phid = v["attachments"]["projects"]["projectPHIDs"][0]
-      .as_str()
-      .unwrap();
-    let board: &Value = &v["attachments"]["columns"]["boards"][project_phid]["columns"][0];
+    let project_phids: &Vec<Value> = match &v["attachments"]["projects"]["projectPHIDs"] {
+      Value::Array(arr) => arr,
+      _ => panic!(
+        "Project phids is not an array {:?}",
+        v["attachments"]["projects"]["projectPHIDs"]
+      ),
+    };
+
+    let project_phids: Vec<String> = project_phids.iter().map(json_to_string).collect();
+
+    let board: Option<&Value> =
+      Task::guess_board_from_projects(&v["attachments"]["columns"]["boards"], &project_phids);
     let fields: &Value = &v["fields"];
 
     let task = Task {
-      // id: v["id"].as_u64().unwrap(),
+      id: v["id"].as_u64().unwrap(),
       task_type: json_to_string(&v["type"]),
       phid: json_to_string(&v["phid"]),
       name: json_to_string(&fields["name"]),
       description: json_to_string(&fields["description"]["raw"]),
       author_phid: json_to_string(&fields["authorPHID"]),
-      owner_phid: json_to_string(&fields["ownerPHID"]),
+      owner_phid: fields["ownerPHID"].as_str().map(Into::into),
       status: json_to_string(&fields["status"]["value"]),
       priority: json_to_string(&fields["priority"]["name"]),
       point: fields["points"].as_u64(),
-      project_phid: String::from(project_phid),
-      board: Board {
-        id: board["id"].as_u64().unwrap(),
-        phid: board["phid"].as_str().unwrap().into(),
-        name: board["name"].as_str().unwrap().into(),
-      },
+      project_phids,
+      board: board.map(|board: &Value| {
+        return Board {
+          id: board["id"].as_u64().unwrap(),
+          phid: board["phid"].as_str().unwrap().into(),
+          name: board["name"].as_str().unwrap().into(),
+        };
+      }),
       created_at: fields["dateCreated"].as_u64().unwrap(),
       updated_at: fields["dateModified"].as_u64().unwrap(),
     };
 
     return task;
+  }
+
+  pub fn guess_board_from_projects<'a>(
+    boards: &'a Value,
+    project_phids: &Vec<String>,
+  ) -> Option<&'a Value> {
+    return project_phids
+      .iter()
+      .find(|phid| {
+        return boards[phid] != Value::Null;
+      })
+      .map(|phid| &boards[&phid]["columns"][0]);
   }
 }
 
