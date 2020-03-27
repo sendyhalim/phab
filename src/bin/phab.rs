@@ -8,6 +8,7 @@ use clap::ArgMatches;
 use clap::SubCommand;
 
 use lib::client::phabricator::PhabricatorClient;
+use lib::client::phabricator::Task;
 
 type ResultDynError<T> = Result<T, Box<dyn Error>>;
 
@@ -68,7 +69,12 @@ fn print_tasks<'a>(
       .take(indentation_level * 2)
       .collect::<String>();
 
-    for task in &tasks {
+    let tasks = tasks
+      .iter()
+      .filter(|task| task.status != "invalid")
+      .collect::<Vec<&Task>>();
+
+    for task in tasks {
       let board_name = task
         .board
         .as_ref()
@@ -77,9 +83,10 @@ fn print_tasks<'a>(
         .unwrap();
 
       println!(
-        "{}[T{} - {} point: {}] {}",
+        "{}[T{} {} - {} point: {}] {}",
         indentation,
         task.id,
+        task.status,
         board_name,
         task.point.or(Some(0)).unwrap(),
         task.name,
