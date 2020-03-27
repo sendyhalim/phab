@@ -1,3 +1,5 @@
+use futures::future::BoxFuture;
+use futures::future::FutureExt;
 use std::error::Error;
 
 use clap::App as Cli;
@@ -49,7 +51,22 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let api_token = task_detail_cli.value_of("api_token").unwrap();
     let phabricator = PhabricatorClient::new(api_token);
 
+    print_tasks(&phabricator, parent_task_id, 0).await?;
+  }
+
+  return Ok(());
+}
+
+fn print_tasks<'a>(
+  phabricator: &'a PhabricatorClient,
+  parent_task_id: &'a str,
+  indentation_level: usize,
+) -> BoxFuture<'a, ResultDynError<()>> {
+  return async move {
     let tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
+    let indentation = std::iter::repeat(" ")
+      .take(indentation_level * 2)
+      .collect::<String>();
 
     for task in &tasks {
       let board_name = task
@@ -60,14 +77,23 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
         .unwrap();
 
       println!(
-        "[T{} point: {} - {}] {}",
+        "{}[T{} - {} point: {}] {}",
+        indentation,
         task.id,
-        task.point.or(Some(0)).unwrap(),
         board_name,
+        task.point.or(Some(0)).unwrap(),
         task.name,
       );
-    }
-  }
 
-  return Ok(());
+      // TODO: Do async recursion-blocking within phabricator client.
+      let sub_tasks = phabricator.get_tasks(vec![&task.id]).await?;
+
+      if sub_tasks.len() > 0 {
+        print_tasks(phabricator, &task.id, indentation_level + 1).await?;
+      }
+    }
+
+    return Ok(());
+  }
+  .boxed();
 }

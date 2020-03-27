@@ -61,7 +61,7 @@ impl PhabricatorClient {
 }
 
 pub struct Task {
-  pub id: u64,
+  pub id: String,
   pub task_type: String,
   pub phid: String,
   pub name: String,
@@ -94,7 +94,7 @@ impl Task {
     let fields: &Value = &v["fields"];
 
     let task = Task {
-      id: v["id"].as_u64().unwrap(),
+      id: format!("{}", v["id"].as_u64().unwrap()),
       task_type: json_to_string(&v["type"]),
       phid: json_to_string(&v["phid"]),
       name: json_to_string(&fields["name"]),

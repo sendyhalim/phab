@@ -11,6 +11,7 @@ serde_json = { version = "1.0" }
 reqwest = { version = "0.10", features = ["json"] }
 tokio = { version = "0.2", features = ["full"] }
 clap = { version = "2.33" }
+futures = { version = "0.3" }
 
 [lib]
 name = "lib"
