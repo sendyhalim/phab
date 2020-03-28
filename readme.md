@@ -18,6 +18,6 @@ TODO: Dynamically Linked Binaries
 ## Usage
 ```bash
 # See child task details
-# phab task detail <task number> --api-token <token>
-phab task detail 22557 --api-token my-token
+# phab task detail <task number> --api-token <token> --host <host>
+phab task detail 22557 --api-token my-token --host="yourphabricatorhost.com"
 ```
