@@ -6,13 +6,15 @@ use serde_json::{Result as SerdeResult, Value};
 
 pub struct PhabricatorClient {
   http: reqwest::Client,
+  host: String,
   api_token: String,
 }
 
 impl PhabricatorClient {
-  pub fn new(api_token: &str) -> PhabricatorClient {
+  pub fn new(host: &str, api_token: &str) -> PhabricatorClient {
     return PhabricatorClient {
       http: reqwest::Client::new(),
+      host: String::from(host),
       api_token: String::from(api_token),
     };
   }
@@ -35,12 +37,8 @@ impl PhabricatorClient {
     form.insert(String::from("attachments[columns]"), "true");
     form.insert(String::from("attachments[projects]"), "true");
 
-    let result = self
-      .http
-      .post("https://p.cermati.com/api/maniphest.search")
-      .form(&form)
-      .send()
-      .await?;
+    let url = format!("{}/api/maniphest.search", self.host);
+    let result = self.http.post(&url).form(&form).send().await?;
 
     let response_text = result.text().await?;
     let body: Value = serde_json::from_str(response_text.as_str())?;

@@ -35,6 +35,12 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
     .long("api-token")
     .help("api token");
 
+  let host_arg = Arg::with_name("host")
+    .takes_value(true)
+    .required(true)
+    .long("host")
+    .help("host");
+
   return SubCommand::with_name("task")
     .setting(clap::AppSettings::ArgRequiredElseHelp)
     .about("task cli")
@@ -42,7 +48,8 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
       SubCommand::with_name("detail")
         .about("View task detail")
         .arg(task_id_arg)
-        .arg(&api_token_arg),
+        .arg(&api_token_arg)
+        .arg(&host_arg),
     );
 }
 
@@ -50,7 +57,9 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
   if let Some(task_detail_cli) = cli.subcommand_matches("detail") {
     let parent_task_id = task_detail_cli.value_of("task_id").unwrap();
     let api_token = task_detail_cli.value_of("api_token").unwrap();
-    let phabricator = PhabricatorClient::new(api_token);
+    let host = task_detail_cli.value_of("host").unwrap();
+
+    let phabricator = PhabricatorClient::new(host, api_token);
 
     print_tasks(&phabricator, parent_task_id, 0).await?;
   }
