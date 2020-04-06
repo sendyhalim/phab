@@ -1,22 +1,89 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
 
-use reqwest;
-use serde_json::{Result as SerdeResult, Value};
+use reqwest::Client as HttpClient;
+use reqwest::ClientBuilder as HttpClientBuilder;
+use reqwest::Identity;
+use serde_json::Value;
+
+use crate::types::ResultDynError;
+use failure::Fail;
 
 pub struct PhabricatorClient {
-  http: reqwest::Client,
+  http: HttpClient,
   host: String,
   api_token: String,
 }
 
+pub struct CertIdentityConfig<'a> {
+  pub pkcs12_path: &'a str,
+  pub pkcs12_password: &'a str,
+}
+
+#[derive(Debug, Clone, Fail)]
+pub enum ErrorType {
+  #[fail(
+    display = "Certificate identity path: {}, error: {}",
+    pkcs12_path, message
+  )]
+  CertificateIdentityError {
+    pkcs12_path: String,
+    message: String,
+  },
+
+  #[fail(display = "Fail to configure http client, error: {}", message)]
+  FailToConfigureHttpClient { message: String },
+}
+
 impl PhabricatorClient {
-  pub fn new(host: &str, api_token: &str) -> PhabricatorClient {
-    return PhabricatorClient {
-      http: reqwest::Client::new(),
-      host: String::from(host),
-      api_token: String::from(api_token),
-    };
+  pub fn new(
+    host: &str,
+    api_token: &str,
+    cert_identity_config: Option<CertIdentityConfig>,
+  ) -> ResultDynError<PhabricatorClient> {
+    let mut http_client_builder = Ok(HttpClientBuilder::new());
+
+    let cert_identity: Option<Result<_, _>> = cert_identity_config.map(|config| {
+      return fs::read(config.pkcs12_path)
+        .map_err(|err| ErrorType::FailToConfigureHttpClient {
+          message: err.to_string(),
+        })
+        .and_then(|bytes| {
+          return Identity::from_pkcs12_der(&bytes, config.pkcs12_password).map_err(|err| {
+            ErrorType::CertificateIdentityError {
+              pkcs12_path: String::from(config.pkcs12_path),
+              message: err.to_string(),
+            }
+          });
+        });
+    });
+
+    if let Some(cert_identity) = cert_identity {
+      http_client_builder =
+        http_client_builder.and_then(|http_client_builder: HttpClientBuilder| {
+          return cert_identity.map(|cert_identity: Identity| {
+            return http_client_builder.identity(cert_identity);
+          });
+        });
+    }
+
+    return http_client_builder
+      .and_then(|http_client_builder| {
+        http_client_builder
+          .build()
+          .map_err(|err| ErrorType::FailToConfigureHttpClient {
+            message: err.to_string(),
+          })
+      })
+      .map_err(|err| Box::new(err.into()))
+      .map(|http_client| {
+        return PhabricatorClient {
+          http: http_client,
+          host: String::from(host),
+          api_token: String::from(api_token),
+        };
+      });
   }
 }
 

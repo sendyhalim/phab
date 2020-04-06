@@ -7,10 +7,14 @@ use clap::Arg;
 use clap::ArgMatches;
 use clap::SubCommand;
 
+use lib::client::phabricator::CertIdentityConfig;
 use lib::client::phabricator::PhabricatorClient;
 use lib::client::phabricator::Task;
 
 type ResultDynError<T> = Result<T, Box<dyn Error>>;
+
+#[macro_use]
+extern crate failure;
 
 #[tokio::main]
 pub async fn main() -> ResultDynError<()> {
@@ -41,6 +45,16 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
     .long("host")
     .help("host");
 
+  let pkcs12_path = Arg::with_name("pkcs12_path")
+    .takes_value(true)
+    .long("pkcs12-path")
+    .help("pkcs12 path");
+
+  let pkcs12_password = Arg::with_name("pkcs12_password")
+    .takes_value(true)
+    .long("pkcs12-password")
+    .help("pkcs12 password");
+
   return SubCommand::with_name("task")
     .setting(clap::AppSettings::ArgRequiredElseHelp)
     .about("task cli")
@@ -49,7 +63,9 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
         .about("View task detail")
         .arg(task_id_arg)
         .arg(&api_token_arg)
-        .arg(&host_arg),
+        .arg(&host_arg)
+        .arg(&pkcs12_path)
+        .arg(&pkcs12_password),
     );
 }
 
@@ -58,8 +74,24 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let parent_task_id = task_detail_cli.value_of("task_id").unwrap();
     let api_token = task_detail_cli.value_of("api_token").unwrap();
     let host = task_detail_cli.value_of("host").unwrap();
+    let pkcs12_path = task_detail_cli.value_of("pkcs12_path");
+    let pkcs12_password = task_detail_cli.value_of("pkcs12_password");
 
-    let phabricator = PhabricatorClient::new(host, api_token);
+    if pkcs12_path.is_some() && pkcs12_password.is_none() {
+      return Err(Box::new(
+        format_err!("pkcs12-password must be set!").compat(),
+      ));
+    }
+
+    let cert_identity_config = pkcs12_path.map(|pkcs12_path| {
+      return CertIdentityConfig {
+        pkcs12_path,
+        pkcs12_password: pkcs12_password.unwrap(),
+      };
+    });
+
+    let phabricator = PhabricatorClient::new(host, api_token, cert_identity_config)
+      .map_err(|failure_error| failure_error.compat())?;
 
     print_tasks(&phabricator, parent_task_id, 0).await?;
   }
