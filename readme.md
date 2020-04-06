@@ -19,5 +19,9 @@ TODO: Dynamically Linked Binaries
 ```bash
 # See child task details
 # phab task detail <task number> --api-token <token> --host <host>
-phab task detail 22557 --api-token my-token --host="yourphabricatorhost.com" --pkcs12-path="<optional /path/to/pkcs12file>" --pkcs12-password="<required if pkcs12-path is set>"
+phab task detail 22557 \
+  --api-token my-token \
+  --host="yourphabricatorhost.com" \
+  --pkcs12-path="<optional /path/to/pkcs12file>" \
+  --pkcs12-password="<required if pkcs12-path is set>"
 ```
