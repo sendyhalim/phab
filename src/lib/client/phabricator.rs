@@ -37,6 +37,19 @@ pub enum ErrorType {
 }
 
 impl PhabricatorClient {
+  /// This function will trim 'T' at the start of phabricator id.
+  /// This is to cover case when you copy-paste the phabricator id from url,
+  /// e.g. yourphabhost.com/T1234
+  /// ```
+  /// # use lib::client::phabricator::PhabricatorClient;
+  ///
+  /// let phabricator_id  = PhabricatorClient::clean_id("T1234");
+  /// assert_eq!(phabricator_id, "1234");
+  /// ```
+  pub fn clean_id(id: &str) -> &str {
+    return id.trim_start_matches('T');
+  }
+
   pub fn new(
     host: &str,
     api_token: &str,
@@ -94,10 +107,8 @@ impl PhabricatorClient {
     form.insert(String::from("api.token"), self.api_token.as_str());
 
     for i in 0..parent_task_ids.len() {
-      form.insert(
-        format!("constraints[parentIDs][{}]", i),
-        parent_task_ids.get(i).unwrap(),
-      );
+      let task_id = PhabricatorClient::clean_id(parent_task_ids.get(i).unwrap());
+      form.insert(format!("constraints[parentIDs][{}]", i), task_id);
     }
 
     form.insert(String::from("order"), "oldest");
