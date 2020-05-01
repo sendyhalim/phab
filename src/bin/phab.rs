@@ -15,11 +15,21 @@ type ResultDynError<T> = Result<T, Box<dyn Error>>;
 #[macro_use]
 extern crate failure;
 
+pub mod built_info {
+  include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[tokio::main]
 pub async fn main() -> ResultDynError<()> {
   env_logger::init();
 
-  let cli = Cli::new("phab").subcommand(task_cmd()).get_matches();
+  let cli = Cli::new("phab")
+    .version(built_info::PKG_VERSION)
+    .author(built_info::PKG_AUTHORS)
+    .setting(clap::AppSettings::ArgRequiredElseHelp)
+    .about(built_info::PKG_DESCRIPTION)
+    .subcommand(task_cmd())
+    .get_matches();
 
   if let Some(task_cli) = cli.subcommand_matches("task") {
     handle_task_cli(task_cli).await?;
