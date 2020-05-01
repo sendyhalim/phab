@@ -3,6 +3,15 @@ name = "phab"
 version = "0.0.4"
 authors = ["Sendy Halim <sendyhalim93@gmail.com>"]
 edition = "2018"
+description = """\
+  CLI utility client for phabricator
+"""
+readme = "readme.md"
+homepage = "https://github.com/sendyhalim/phab"
+repository = "https://github.com/sendyhalim/phab"
+keywords = ["cli", "phabricator", "developer-tools"]
+categories = ["command-line-utilities"]
+license-file = "license"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
