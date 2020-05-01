@@ -1,1 +1,1 @@
-pub type ResultDynError<T> = Result<T, Box<failure::Error>>;
+pub type ResultDynError<T> = Result<T, failure::Error>;
