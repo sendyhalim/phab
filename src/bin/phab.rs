@@ -1,11 +1,10 @@
-use futures::future::BoxFuture;
-use futures::future::FutureExt;
 use std::error::Error;
 
 use clap::App as Cli;
 use clap::Arg;
 use clap::ArgMatches;
 use clap::SubCommand;
+use env_logger;
 
 use lib::client::phabricator::CertIdentityConfig;
 use lib::client::phabricator::PhabricatorClient;
@@ -18,6 +17,8 @@ extern crate failure;
 
 #[tokio::main]
 pub async fn main() -> ResultDynError<()> {
+  env_logger::init();
+
   let cli = Cli::new("phab").subcommand(task_cmd()).get_matches();
 
   if let Some(task_cli) = cli.subcommand_matches("task") {
@@ -93,55 +94,42 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let phabricator = PhabricatorClient::new(host, api_token, cert_identity_config)
       .map_err(|failure_error| failure_error.compat())?;
 
-    print_tasks(&phabricator, parent_task_id, 0).await?;
+    let child_tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
+
+    print_tasks(&child_tasks, 0);
   }
 
   return Ok(());
 }
 
-fn print_tasks<'a>(
-  phabricator: &'a PhabricatorClient,
-  parent_task_id: &'a str,
-  indentation_level: usize,
-) -> BoxFuture<'a, ResultDynError<()>> {
-  return async move {
-    let tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
-    let indentation = std::iter::repeat(" ")
-      .take(indentation_level * 2)
-      .collect::<String>();
+fn print_tasks(tasks: &Vec<Task>, indentation_level: usize) {
+  let indentation = std::iter::repeat(" ")
+    .take(indentation_level * 2)
+    .collect::<String>();
 
-    let tasks = tasks
-      .iter()
-      .filter(|task| task.status != "invalid")
-      .collect::<Vec<&Task>>();
+  let tasks = tasks
+    .iter()
+    .filter(|task| task.status != "invalid")
+    .collect::<Vec<&Task>>();
 
-    for task in tasks {
-      let board_name = task
-        .board
-        .as_ref()
-        .map(|b| b.name.clone())
-        .or({ Some(String::from("NoBoard")) })
-        .unwrap();
+  for task in tasks {
+    let board_name = task
+      .board
+      .as_ref()
+      .map(|b| b.name.clone())
+      .or({ Some(String::from("NoBoard")) })
+      .unwrap();
 
-      println!(
-        "{}[T{} {} - {} point: {}] {}",
-        indentation,
-        task.id,
-        task.status,
-        board_name,
-        task.point.or(Some(0)).unwrap(),
-        task.name,
-      );
+    println!(
+      "{}[T{} {} - {} point: {}] {}",
+      indentation,
+      task.id,
+      task.status,
+      board_name,
+      task.point.or(Some(0)).unwrap(),
+      task.name,
+    );
 
-      // TODO: Do async recursion-blocking within phabricator client.
-      let sub_tasks = phabricator.get_tasks(vec![&task.id]).await?;
-
-      if sub_tasks.len() > 0 {
-        print_tasks(phabricator, &task.id, indentation_level + 1).await?;
-      }
-    }
-
-    return Ok(());
+    print_tasks(&task.child_tasks, indentation_level + 1);
   }
-  .boxed();
 }
