@@ -3,6 +3,11 @@ My laziness to click and track phabricator UI drives me to create this project.
 
 
 ## Installation
+### Cargo
+```bash
+cargo install phab
+```
+
 ### Manual
 ```bash
 git clone git@github.com:sendyhalim/phab.git
