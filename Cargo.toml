@@ -13,6 +13,8 @@ tokio = { version = "0.2", features = ["full"] }
 clap = { version = "2.33" }
 futures = { version = "0.3" }
 failure = { version = "0.1.7" }
+env_logger = { version = "0.7.1" }
+log = { version = "0.4.8" }
 
 [lib]
 name = "lib"

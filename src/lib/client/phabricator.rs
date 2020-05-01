@@ -1,7 +1,8 @@
-use std::collections::HashMap;
-use std::error::Error;
 use std::fs;
 
+use futures::future;
+use futures::future::BoxFuture;
+use futures::future::FutureExt;
 use reqwest::Client as HttpClient;
 use reqwest::ClientBuilder as HttpClientBuilder;
 use reqwest::Identity;
@@ -34,6 +35,15 @@ pub enum ErrorType {
 
   #[fail(display = "Fail to configure http client, error: {}", message)]
   FailToConfigureHttpClient { message: String },
+
+  #[fail(display = "Validation error: {}", message)]
+  ValidationError { message: String },
+
+  #[fail(display = "Fetch sub tasks error: {}", message)]
+  FetchSubTasksError { message: String },
+
+  #[fail(display = "Fetch task error: {}", message)]
+  FetchTaskError { message: String },
 }
 
 impl PhabricatorClient {
@@ -89,7 +99,7 @@ impl PhabricatorClient {
             message: err.to_string(),
           })
       })
-      .map_err(|err| Box::new(err.into()))
+      .map_err(failure::Error::from)
       .map(|http_client| {
         return PhabricatorClient {
           http: http_client,
@@ -101,38 +111,104 @@ impl PhabricatorClient {
 }
 
 impl PhabricatorClient {
-  pub async fn get_tasks(&self, parent_task_ids: Vec<&str>) -> Result<Vec<Task>, Box<dyn Error>> {
-    let mut form: HashMap<String, &str> = HashMap::new();
+  pub fn get_tasks<'a>(
+    &'a self,
+    parent_task_ids: Vec<&'a str>,
+  ) -> BoxFuture<'a, ResultDynError<Vec<Task>>> {
+    return async move {
+      if parent_task_ids.is_empty() {
+        return Err(
+          ErrorType::ValidationError {
+            message: String::from("Parent ids cannot be empty"),
+          }
+          .into(),
+        );
+      }
 
-    form.insert(String::from("api.token"), self.api_token.as_str());
+      let mut form: Vec<(String, &str)> = vec![("api.token".to_owned(), self.api_token.as_str())];
 
-    for i in 0..parent_task_ids.len() {
-      let task_id = PhabricatorClient::clean_id(parent_task_ids.get(i).unwrap());
-      form.insert(format!("constraints[parentIDs][{}]", i), task_id);
+      for i in 0..parent_task_ids.len() {
+        let task_id = PhabricatorClient::clean_id(parent_task_ids.get(i).unwrap());
+        let key = format!("constraints[parentIDs][{}]", i);
+
+        form.push((key, task_id));
+      }
+
+      form.push(("order".to_owned(), "oldest"));
+      form.push(("attachments[columns]".to_owned(), "true"));
+      form.push(("attachments[projects]".to_owned(), "true"));
+
+      let url = format!("{}/api/maniphest.search", self.host);
+
+      log::debug!("Getting tasks {} {:?}", url, form);
+
+      let result = self
+        .http
+        .post(&url)
+        .form(&form)
+        .send()
+        .await
+        .map_err(failure::Error::from)?;
+
+      let response_text = result.text().await.map_err(failure::Error::from)?;
+
+      log::debug!("Response {}", response_text);
+
+      let body: Value =
+        serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
+
+      if let Value::Array(tasks_json) = &body["result"]["data"] {
+        let tasks: Vec<BoxFuture<ResultDynError<Task>>> = tasks_json
+          .iter()
+          .map(|v: &Value| -> BoxFuture<ResultDynError<Task>> {
+            return async move {
+              let mut task = Task::from_json(&v);
+
+              let child_tasks = self
+                .get_tasks(vec![task.id.as_str()])
+                .await
+                .map_err(|err| {
+                  return ErrorType::FetchSubTasksError {
+                    message: format!(
+                      "Could not fetch sub tasks with parent id {}, err: {}",
+                      task.id, err
+                    ),
+                  };
+                })?;
+
+              task.child_tasks = child_tasks;
+
+              return Ok(task);
+            }
+            .boxed();
+          })
+          .collect();
+
+        let (tasks, failed_tasks): (Vec<_>, Vec<_>) = future::join_all(tasks)
+          .await
+          .into_iter()
+          .partition(Result::is_ok);
+
+        if !failed_tasks.is_empty() {
+          let error = ErrorType::FetchSubTasksError {
+            message: failed_tasks
+              .into_iter()
+              .fold(String::new(), |acc, task_result| {
+                return format!("{}\n{}", acc, task_result.err().unwrap());
+              }),
+          };
+
+          return Err(error.into());
+        }
+
+        let tasks: Vec<Task> = tasks.into_iter().map(Result::unwrap).collect();
+
+        return Ok(tasks);
+      } else {
+        panic!("Cannot parse {}", &body);
+      }
     }
-
-    form.insert(String::from("order"), "oldest");
-    form.insert(String::from("attachments[columns]"), "true");
-    form.insert(String::from("attachments[projects]"), "true");
-
-    let url = format!("{}/api/maniphest.search", self.host);
-    let result = self.http.post(&url).form(&form).send().await?;
-
-    let response_text = result.text().await?;
-    let body: Value = serde_json::from_str(response_text.as_str())?;
-
-    if let Value::Array(tasks_json) = &body["result"]["data"] {
-      let tasks: Vec<Task> = tasks_json
-        .iter()
-        .map(|v: &Value| -> Task {
-          return Task::from_json(&v);
-        })
-        .collect();
-
-      return Ok(tasks);
-    } else {
-      panic!("Cannot parse {}", &body);
-    }
+    .boxed();
   }
 }
 
@@ -149,6 +225,7 @@ pub struct Task {
   pub point: Option<u64>,
   pub project_phids: Vec<String>,
   pub board: Option<Board>,
+  pub child_tasks: Vec<Task>,
   pub created_at: u64,
   pub updated_at: u64,
 }
@@ -188,6 +265,7 @@ impl Task {
           name: board["name"].as_str().unwrap().into(),
         };
       }),
+      child_tasks: vec![],
       created_at: fields["dateCreated"].as_u64().unwrap(),
       updated_at: fields["dateModified"].as_u64().unwrap(),
     };
