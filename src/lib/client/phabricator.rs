@@ -6,6 +6,8 @@ use futures::future::FutureExt;
 use reqwest::Client as HttpClient;
 use reqwest::ClientBuilder as HttpClientBuilder;
 use reqwest::Identity;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::types::ResultDynError;
@@ -212,6 +214,7 @@ impl PhabricatorClient {
   }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
   pub id: String,
   pub task_type: String,
@@ -284,12 +287,17 @@ impl Task {
       })
       .map(|phid| &boards[&phid]["columns"][0]);
   }
+
+  pub fn as_json(tasks: &Vec<Task>) -> ResultDynError<String> {
+    return serde_json::to_string(tasks).map_err(failure::Error::from);
+  }
 }
 
 fn json_to_string(v: &Value) -> String {
   return v.as_str().unwrap().into();
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Board {
   pub id: u64,
   pub phid: String,

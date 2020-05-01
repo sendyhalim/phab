@@ -29,4 +29,5 @@ phab task detail 22557 \
   --host="yourphabricatorhost.com" \
   --pkcs12-path="<optional /path/to/pkcs12file>" \
   --pkcs12-password="<required if pkcs12-path is set>"
+  --print-json # Optional, set if you want to print output as raw json
 ```

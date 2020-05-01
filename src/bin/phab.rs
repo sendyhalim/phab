@@ -46,6 +46,11 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
     .long("host")
     .help("host");
 
+  let print_json = Arg::with_name("print_json")
+    .takes_value(false)
+    .long("print-json")
+    .help("Set if you want to print json");
+
   let pkcs12_path = Arg::with_name("pkcs12_path")
     .takes_value(true)
     .long("pkcs12-path")
@@ -66,7 +71,8 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
         .arg(&api_token_arg)
         .arg(&host_arg)
         .arg(&pkcs12_path)
-        .arg(&pkcs12_password),
+        .arg(&pkcs12_password)
+        .arg(&print_json),
     );
 }
 
@@ -77,6 +83,7 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let host = task_detail_cli.value_of("host").unwrap();
     let pkcs12_path = task_detail_cli.value_of("pkcs12_path");
     let pkcs12_password = task_detail_cli.value_of("pkcs12_password");
+    let print_json = task_detail_cli.is_present("print_json");
 
     if pkcs12_path.is_some() && pkcs12_password.is_none() {
       return Err(Box::new(
@@ -96,7 +103,11 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
 
     let child_tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
 
-    print_tasks(&child_tasks, 0);
+    if print_json {
+      println!("{}", Task::as_json(&child_tasks)?);
+    } else {
+      print_tasks(&child_tasks, 0);
+    }
   }
 
   return Ok(());
