@@ -8,7 +8,7 @@ use env_logger;
 
 use lib::client::phabricator::CertIdentityConfig;
 use lib::client::phabricator::PhabricatorClient;
-use lib::client::phabricator::Task;
+use lib::client::phabricator::TaskFamily;
 
 type ResultDynError<T> = Result<T, Box<dyn Error>>;
 
@@ -114,7 +114,7 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let child_tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
 
     if print_json {
-      println!("{}", Task::as_json(&child_tasks)?);
+      println!("{}", TaskFamily::json_string(&child_tasks)?);
     } else {
       print_tasks(&child_tasks, 0);
     }
@@ -123,17 +123,19 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
   return Ok(());
 }
 
-fn print_tasks(tasks: &Vec<Task>, indentation_level: usize) {
+fn print_tasks(task_families: &[TaskFamily], indentation_level: usize) {
   let indentation = std::iter::repeat(" ")
     .take(indentation_level * 2)
     .collect::<String>();
 
-  let tasks = tasks
+  let task_families = task_families
     .iter()
-    .filter(|task| task.status != "invalid")
-    .collect::<Vec<&Task>>();
+    .filter(|task_family| task_family.parent_task.status != "invalid")
+    .collect::<Vec<&TaskFamily>>();
 
-  for task in tasks {
+  for task_family in task_families {
+    let task = &task_family.parent_task;
+
     let board_name = task
       .board
       .as_ref()
@@ -151,6 +153,6 @@ fn print_tasks(tasks: &Vec<Task>, indentation_level: usize) {
       task.name,
     );
 
-    print_tasks(&task.child_tasks, indentation_level + 1);
+    print_tasks(&task_family.children, indentation_level + 1);
   }
 }

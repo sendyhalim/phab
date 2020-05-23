@@ -1,5 +1,7 @@
 use std::fs;
 
+use fake::Dummy;
+use fake::Fake;
 use futures::future;
 use futures::future::BoxFuture;
 use futures::future::FutureExt;
@@ -116,7 +118,7 @@ impl PhabricatorClient {
   pub fn get_tasks<'a>(
     &'a self,
     parent_task_ids: Vec<&'a str>,
-  ) -> BoxFuture<'a, ResultDynError<Vec<Task>>> {
+  ) -> BoxFuture<'a, ResultDynError<Vec<TaskFamily>>> {
     return async move {
       if parent_task_ids.is_empty() {
         return Err(
@@ -160,27 +162,28 @@ impl PhabricatorClient {
         serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
 
       if let Value::Array(tasks_json) = &body["result"]["data"] {
-        let tasks: Vec<BoxFuture<ResultDynError<Task>>> = tasks_json
+        let tasks: Vec<BoxFuture<ResultDynError<TaskFamily>>> = tasks_json
           .iter()
-          .map(|v: &Value| -> BoxFuture<ResultDynError<Task>> {
+          .map(|v: &Value| -> BoxFuture<ResultDynError<TaskFamily>> {
             return async move {
-              let mut task = Task::from_json(&v);
+              let parent_task = Task::from_json(&v);
 
-              let child_tasks = self
-                .get_tasks(vec![task.id.as_str()])
+              let children = self
+                .get_tasks(vec![parent_task.id.as_str()])
                 .await
                 .map_err(|err| {
                   return ErrorType::FetchSubTasksError {
                     message: format!(
                       "Could not fetch sub tasks with parent id {}, err: {}",
-                      task.id, err
+                      parent_task.id, err
                     ),
                   };
                 })?;
 
-              task.child_tasks = child_tasks;
-
-              return Ok(task);
+              return Ok(TaskFamily {
+                parent_task,
+                children,
+              });
             }
             .boxed();
           })
@@ -203,9 +206,9 @@ impl PhabricatorClient {
           return Err(error.into());
         }
 
-        let tasks: Vec<Task> = tasks.into_iter().map(Result::unwrap).collect();
+        let task_families: Vec<TaskFamily> = tasks.into_iter().map(Result::unwrap).collect();
 
-        return Ok(tasks);
+        return Ok(task_families);
       } else {
         panic!("Cannot parse {}", &body);
       }
@@ -215,6 +218,18 @@ impl PhabricatorClient {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct TaskFamily {
+  pub parent_task: Task,
+  pub children: Vec<TaskFamily>,
+}
+
+impl TaskFamily {
+  pub fn json_string(task_families: &[TaskFamily]) -> ResultDynError<String> {
+    return serde_json::to_string(task_families).map_err(failure::Error::from);
+  }
+}
+
+#[derive(Serialize, Deserialize, Dummy, Debug)]
 pub struct Task {
   pub id: String,
   pub task_type: String,
@@ -228,7 +243,6 @@ pub struct Task {
   pub point: Option<u64>,
   pub project_phids: Vec<String>,
   pub board: Option<Board>,
-  pub child_tasks: Vec<Task>,
   pub created_at: u64,
   pub updated_at: u64,
 }
@@ -268,7 +282,6 @@ impl Task {
           name: board["name"].as_str().unwrap().into(),
         };
       }),
-      child_tasks: vec![],
       created_at: fields["dateCreated"].as_u64().unwrap(),
       updated_at: fields["dateModified"].as_u64().unwrap(),
     };
@@ -278,7 +291,7 @@ impl Task {
 
   pub fn guess_board_from_projects<'a>(
     boards: &'a Value,
-    project_phids: &Vec<String>,
+    project_phids: &[String],
   ) -> Option<&'a Value> {
     return project_phids
       .iter()
@@ -287,17 +300,13 @@ impl Task {
       })
       .map(|phid| &boards[&phid]["columns"][0]);
   }
-
-  pub fn as_json(tasks: &Vec<Task>) -> ResultDynError<String> {
-    return serde_json::to_string(tasks).map_err(failure::Error::from);
-  }
 }
 
 fn json_to_string(v: &Value) -> String {
   return v.as_str().unwrap().into();
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Dummy, Debug)]
 pub struct Board {
   pub id: u64,
   pub phid: String,
