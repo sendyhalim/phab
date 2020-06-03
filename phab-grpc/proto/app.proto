@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package grpc.phab.service;
+
+import "task.proto";
+
+// Service that handle tasks operations such as:
+// * Registering tasks to watchlist
+// * Fetching watched tasks
+service TaskService {
+  rpc FetchWatchlist(FetchWatchlistInput) returns (FetchWatchlistOutput);
+}
+
+message FetchWatchlistInput {
+}
+
+message FetchWatchlistOutput {
+  grpc.phab.task.Task tasks = 1;
+}

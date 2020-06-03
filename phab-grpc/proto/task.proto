@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package grpc.phab.task;
+
+message Task {
+  string id = 1;
+}
+

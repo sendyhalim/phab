@@ -1,0 +1,34 @@
+[package]
+name = "phab-grpc"
+version = "0.0.1"
+authors = ["Sendy Halim <sendyhalim93@gmail.com>"]
+edition = "2018"
+description = """\
+  Phab GRPC server to serve phabricator tasks content.
+"""
+readme = "../readme.md"
+homepage = "https://github.com/sendyhalim/phab"
+repository = "https://github.com/sendyhalim/phab"
+keywords = ["phabricator", "developer-tools", "server"]
+categories = ["command-line-utilities"]
+license-file = "../license"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "2.33" }
+env_logger = { version = "0.7.1" }
+failure = { version = "0.1.7" }
+futures = { version = "0.3" }
+log = { version = "0.4.8" }
+prost = { version = "0.6.1" }
+tokio = { version = "0.2", features = ["full"] }
+tonic = { version = "0.2", features = ["tls"] }
+
+[build-dependencies]
+built = "0.4"
+tonic-build = "0.2"
+
+[[bin]]
+name = "server"
+path = "src/bin/server.rs"
