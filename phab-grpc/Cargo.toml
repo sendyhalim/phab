@@ -29,6 +29,10 @@ tonic = { version = "0.2", features = ["tls"] }
 built = "0.4"
 tonic-build = "0.2"
 
+[lib]
+name = "lib"
+path = "src/lib.rs"
+
 [[bin]]
 name = "server"
 path = "src/bin/server.rs"
