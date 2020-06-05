@@ -18,7 +18,7 @@ impl TaskFamily {
   }
 }
 
-#[derive(Serialize, Deserialize, Dummy, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Dummy)]
 pub struct Task {
   pub id: String,
   pub task_type: String,
@@ -95,9 +95,16 @@ fn json_to_string(v: &Value) -> String {
   return v.as_str().unwrap().into();
 }
 
-#[derive(Serialize, Deserialize, Dummy, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Dummy)]
 pub struct Board {
   pub id: u64,
   pub phid: String,
   pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Dummy)]
+pub struct Watchlist {
+  pub id: Option<String>,
+  pub name: String,
+  pub tasks: Vec<Task>,
 }

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::client::phabricator::Task;
+use crate::dto::Task;
 
 pub struct StatusMetric;
 
