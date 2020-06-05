@@ -1,19 +1,17 @@
 use std::fs;
 
-use fake::Dummy;
-use fake::Fake;
+use failure::Fail;
 use futures::future;
 use futures::future::BoxFuture;
 use futures::future::FutureExt;
 use reqwest::Client as HttpClient;
 use reqwest::ClientBuilder as HttpClientBuilder;
 use reqwest::Identity;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 
+use crate::dto::Task;
+use crate::dto::TaskFamily;
 use crate::types::ResultDynError;
-use failure::Fail;
 
 pub struct PhabricatorClient {
   http: HttpClient,
@@ -215,100 +213,4 @@ impl PhabricatorClient {
     }
     .boxed();
   }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TaskFamily {
-  pub parent_task: Task,
-  pub children: Vec<TaskFamily>,
-}
-
-impl TaskFamily {
-  pub fn json_string(task_families: &[TaskFamily]) -> ResultDynError<String> {
-    return serde_json::to_string(task_families).map_err(failure::Error::from);
-  }
-}
-
-#[derive(Serialize, Deserialize, Dummy, Debug)]
-pub struct Task {
-  pub id: String,
-  pub task_type: String,
-  pub phid: String,
-  pub name: String,
-  pub description: String,
-  pub author_phid: String,
-  pub owner_phid: Option<String>, // Assigned
-  pub status: String,
-  pub priority: String,
-  pub point: Option<u64>,
-  pub project_phids: Vec<String>,
-  pub board: Option<Board>,
-  pub created_at: u64,
-  pub updated_at: u64,
-}
-
-impl Task {
-  pub fn from_json(v: &Value) -> Task {
-    let project_phids: &Vec<Value> = match &v["attachments"]["projects"]["projectPHIDs"] {
-      Value::Array(arr) => arr,
-      _ => panic!(
-        "Project phids is not an array {:?}",
-        v["attachments"]["projects"]["projectPHIDs"]
-      ),
-    };
-
-    let project_phids: Vec<String> = project_phids.iter().map(json_to_string).collect();
-
-    let board: Option<&Value> =
-      Task::guess_board_from_projects(&v["attachments"]["columns"]["boards"], &project_phids);
-    let fields: &Value = &v["fields"];
-
-    let task = Task {
-      id: format!("{}", v["id"].as_u64().unwrap()),
-      task_type: json_to_string(&v["type"]),
-      phid: json_to_string(&v["phid"]),
-      name: json_to_string(&fields["name"]),
-      description: json_to_string(&fields["description"]["raw"]),
-      author_phid: json_to_string(&fields["authorPHID"]),
-      owner_phid: fields["ownerPHID"].as_str().map(Into::into),
-      status: json_to_string(&fields["status"]["value"]),
-      priority: json_to_string(&fields["priority"]["name"]),
-      point: fields["points"].as_u64(),
-      project_phids,
-      board: board.map(|board: &Value| {
-        return Board {
-          id: board["id"].as_u64().unwrap(),
-          phid: board["phid"].as_str().unwrap().into(),
-          name: board["name"].as_str().unwrap().into(),
-        };
-      }),
-      created_at: fields["dateCreated"].as_u64().unwrap(),
-      updated_at: fields["dateModified"].as_u64().unwrap(),
-    };
-
-    return task;
-  }
-
-  pub fn guess_board_from_projects<'a>(
-    boards: &'a Value,
-    project_phids: &[String],
-  ) -> Option<&'a Value> {
-    return project_phids
-      .iter()
-      .find(|phid| {
-        return boards[phid] != Value::Null;
-      })
-      .map(|phid| &boards[&phid]["columns"][0]);
-  }
-}
-
-fn json_to_string(v: &Value) -> String {
-  return v.as_str().unwrap().into();
-}
-
-#[derive(Serialize, Deserialize, Dummy, Debug)]
-pub struct Board {
-  pub id: u64,
-  pub phid: String,
-  pub name: String,
 }

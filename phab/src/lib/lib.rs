@@ -1,4 +1,5 @@
 pub mod client;
+pub mod dto;
 pub mod metric;
 pub mod types;
 
