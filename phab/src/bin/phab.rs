@@ -8,7 +8,7 @@ use env_logger;
 
 use lib::client::phabricator::CertIdentityConfig;
 use lib::client::phabricator::PhabricatorClient;
-use lib::client::phabricator::TaskFamily;
+use lib::dto::TaskFamily;
 
 type ResultDynError<T> = Result<T, Box<dyn Error>>;
 

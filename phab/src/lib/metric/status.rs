@@ -10,7 +10,7 @@ impl StatusMetric {
   /// use fake::Faker;
   /// use fake::Fake;
   /// use fake::Dummy;
-  /// use crate::lib::client::phabricator::Task;
+  /// use crate::lib::dto::Task;
   /// use crate::lib::metric::status::StatusMetric;
   ///
   /// let mut done_statuses = HashSet::new();
