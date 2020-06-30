@@ -1,3 +1,6 @@
+#[macro_use]
+pub mod utils;
+
 pub mod client;
 pub mod dto;
 pub mod metric;
