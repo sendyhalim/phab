@@ -26,7 +26,7 @@ pub struct Task {
   pub name: String,
   pub description: String,
   pub author_phid: String,
-  pub owner_phid: Option<String>, // Assigned
+  pub assigned_phid: Option<String>,
   pub status: String,
   pub priority: String,
   pub point: Option<u64>,
@@ -59,7 +59,7 @@ impl Task {
       name: json_to_string(&fields["name"]),
       description: json_to_string(&fields["description"]["raw"]),
       author_phid: json_to_string(&fields["authorPHID"]),
-      owner_phid: fields["ownerPHID"].as_str().map(Into::into),
+      assigned_phid: fields["ownerPHID"].as_str().map(Into::into),
       status: json_to_string(&fields["status"]["value"]),
       priority: json_to_string(&fields["priority"]["name"]),
       point: fields["points"].as_u64(),
@@ -107,4 +107,29 @@ pub struct Watchlist {
   pub id: Option<String>,
   pub name: String,
   pub tasks: Vec<Task>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Dummy)]
+pub struct User {
+  pub id: String,
+  pub phid: String,
+  pub username: String,
+  pub name: String,
+  pub created_at: u64,
+  pub updated_at: u64,
+}
+
+impl User {
+  pub fn from_json(v: &Value) -> User {
+    let fields: &Value = &v["fields"];
+
+    return User {
+      id: format!("{}", v["id"].as_u64().unwrap()),
+      phid: json_to_string(&v["phid"]),
+      username: json_to_string(&fields["username"]),
+      name: json_to_string(&fields["realName"]),
+      created_at: fields["dateCreated"].as_u64().unwrap(),
+      updated_at: fields["dateModified"].as_u64().unwrap(),
+    };
+  }
 }

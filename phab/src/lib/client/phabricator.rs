@@ -11,6 +11,7 @@ use serde_json::Value;
 
 use crate::dto::Task;
 use crate::dto::TaskFamily;
+use crate::dto::User;
 use crate::types::ResultDynError;
 
 pub struct PhabricatorClient {
@@ -46,6 +47,9 @@ pub enum ErrorType {
 
   #[fail(display = "Fetch task error: {}", message)]
   FetchTaskError { message: String },
+
+  #[fail(display = "Parse error: {}", message)]
+  ParseError { message: String },
 }
 
 impl PhabricatorClient {
@@ -113,6 +117,53 @@ impl PhabricatorClient {
 }
 
 impl PhabricatorClient {
+  pub async fn get_user_by_phid(&self, user_phid: &str) -> ResultDynError<Option<User>> {
+    let form: Vec<(String, &str)> = vec![
+      ("api.token".to_owned(), self.api_token.as_str()),
+      ("constraints[phids][0]".to_owned(), user_phid),
+    ];
+
+    let url = format!("{}/api/user.search", self.host);
+
+    log::debug!("Getting users {} {:?}", url, form);
+
+    let result = self
+      .http
+      .post(&url)
+      .form(&form)
+      .send()
+      .await
+      .map_err(failure::Error::from)?;
+
+    let response_text = result.text().await.map_err(failure::Error::from)?;
+
+    log::debug!("Response {}", response_text);
+
+    let body: Value = serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
+
+    if let Value::Array(users) = &body["result"]["data"] {
+      if users.is_empty() {
+        return Ok(None);
+      }
+
+      let user_json = users.get(0);
+
+      log::debug!("Parsing {:?}", user_json);
+
+      // We only have 1 possible assignment
+      let user = User::from_json(user_json.unwrap());
+
+      return Ok(Some(user));
+    } else {
+      return Err(
+        ErrorType::ParseError {
+          message: format!("Cannot parse {}", &body),
+        }
+        .into(),
+      );
+    }
+  }
+
   pub fn get_tasks<'a>(
     &'a self,
     parent_task_ids: Vec<&'a str>,
@@ -208,7 +259,12 @@ impl PhabricatorClient {
 
         return Ok(task_families);
       } else {
-        panic!("Cannot parse {}", &body);
+        return Err(
+          ErrorType::ParseError {
+            message: format!("Cannot parse {}", &body),
+          }
+          .into(),
+        );
       }
     }
     .boxed();
