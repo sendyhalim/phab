@@ -125,7 +125,7 @@ impl PhabricatorClient {
 
     let url = format!("{}/api/user.search", self.host);
 
-    log::debug!("Getting users {} {:?}", url, form);
+    log::debug!("Getting user by id {} {:?}", url, form);
 
     let result = self
       .http
@@ -154,6 +154,56 @@ impl PhabricatorClient {
       let user = User::from_json(user_json.unwrap());
 
       return Ok(Some(user));
+    } else {
+      return Err(
+        ErrorType::ParseError {
+          message: format!("Cannot parse {}", &body),
+        }
+        .into(),
+      );
+    }
+  }
+
+  pub async fn get_task_by_id(&self, task_id: &str) -> ResultDynError<Option<Task>> {
+    let form: Vec<(String, &str)> = vec![
+      ("api.token".to_owned(), self.api_token.as_str()),
+      ("constraints[ids][0]".to_owned(), task_id),
+      ("order".to_owned(), "oldest"),
+      ("attachments[columns]".to_owned(), "true"),
+      ("attachments[projects]".to_owned(), "true"),
+    ];
+
+    let url = format!("{}/api/maniphest.search", self.host);
+
+    log::debug!("Getting task by id {} {:?}", url, form);
+
+    let result = self
+      .http
+      .post(&url)
+      .form(&form)
+      .send()
+      .await
+      .map_err(failure::Error::from)?;
+
+    let response_text = result.text().await.map_err(failure::Error::from)?;
+
+    log::debug!("Response {}", response_text);
+
+    let body: Value = serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
+
+    if let Value::Array(tasks) = &body["result"]["data"] {
+      if tasks.is_empty() {
+        return Ok(None);
+      }
+
+      let task_json = tasks.get(0);
+
+      log::debug!("Parsing {:?}", task_json);
+
+      // We only have 1 possible assignment
+      let task = Task::from_json(task_json.unwrap());
+
+      return Ok(Some(task));
     } else {
       return Err(
         ErrorType::ParseError {
