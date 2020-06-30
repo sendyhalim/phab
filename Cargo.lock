@@ -819,7 +819,7 @@ dependencies = [
 
 [[package]]
 name = "phab"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "built 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.1 (registry+https://github.com/rust-lang/crates.io-index)",
