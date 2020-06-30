@@ -33,11 +33,17 @@ impl PhabStorageFilesystem {
 }
 
 impl PhabStorageFilesystem {
-  pub fn reload(&mut self) -> ResultDynError<()> {
+  fn watchlist_table(&mut self) -> &mut Table {
+    return self
+      .db_content
+      .entry("watchlists".to_owned())
+      .or_insert(HashMap::new());
+  }
+
+  fn reload(&mut self) -> ResultDynError<()> {
     if !self.filepath.exists() {
-      self
-        .db_content
-        .insert("watchlists".to_owned(), HashMap::new());
+      let _ = self.watchlist_table();
+
       self.persist()?;
     }
 
@@ -47,7 +53,8 @@ impl PhabStorageFilesystem {
     return Ok(());
   }
 
-  pub fn persist(&self) -> ResultDynError<()> {
+  fn persist(&self) -> ResultDynError<()> {
+    // Create db file if not exist
     if !self.filepath.exists() {
       let mut cloned_filepath = self.filepath.clone();
       cloned_filepath.pop();
@@ -55,6 +62,7 @@ impl PhabStorageFilesystem {
       fs::create_dir_all(&cloned_filepath)?;
     }
 
+    // Write all db content to db file
     let content = serde_json::to_string(&self.db_content)?;
     fs::write(&self.filepath, content)?;
 
@@ -78,12 +86,10 @@ impl PhabStorageFilesystemError {
 }
 
 impl PhabStorage for PhabStorageFilesystem {
-  fn add_to_watchlist(&mut self, watchlist_id: String, task: &Task) -> ResultDynError<()> {
+  fn add_to_watchlist(&mut self, watchlist_id: &str, task: &Task) -> ResultDynError<()> {
     self
-      .db_content
-      .get_mut("watchlists")
-      .unwrap()
-      .get_mut(&watchlist_id)
+      .watchlist_table()
+      .get_mut(watchlist_id)
       .unwrap()
       .tasks
       .push(task.clone());
@@ -107,21 +113,15 @@ impl PhabStorage for PhabStorageFilesystem {
   }
 
   fn get_watchlists(&mut self) -> ResultDynError<Vec<Watchlist>> {
-    let watchlists: Vec<Watchlist> = self
-      .db_content
-      .get("watchlists")
-      .unwrap()
-      .values()
-      .cloned()
-      .collect();
+    let watchlists: Vec<Watchlist> = self.watchlist_table().values().cloned().collect();
 
     return Ok(watchlists);
   }
 
-  fn get_watchlist_by_id(&mut self, watchlist_id: String) -> ResultDynError<Option<Watchlist>> {
-    return Err(PhabStorageFilesystemError::query_error(
-      "Not implemented yet",
-    ));
+  fn get_watchlist_by_id(&mut self, watchlist_id: &str) -> ResultDynError<Option<Watchlist>> {
+    let watchlist = self.watchlist_table().get(watchlist_id).map(Clone::clone);
+
+    return Ok(watchlist);
   }
 }
 
@@ -144,6 +144,8 @@ mod test {
 
   mod reload {
     use super::*;
+    use fake::Fake;
+    use fake::Faker;
 
     fn create_new(db_dir_path: PathBuf) -> ResultDynError<PhabStorageFilesystem> {
       let mut storage = PhabStorageFilesystem {
@@ -160,9 +162,13 @@ mod test {
       return Ok(storage);
     }
 
+    fn test_db_dir(fn_name: &str) -> PathBuf {
+      return PathBuf::from(format!("/tmp/__phab_for_testing/db_{}", fn_name));
+    }
+
     #[test]
     fn it_should_create_dir_and_load_data_for_first_time() -> ResultDynError<()> {
-      let db_dir_path = PathBuf::from("/tmp/__phab_for_testing/db");
+      let db_dir_path = test_db_dir(function_name!());
       let _dir_cleaner = DirCleaner {
         dir: db_dir_path.clone(),
       };
@@ -176,8 +182,8 @@ mod test {
     }
 
     #[test]
-    fn it_insert_data() -> ResultDynError<()> {
-      let db_dir_path = PathBuf::from("/tmp/__phab_for_testing/db");
+    fn it_should_insert_data() -> ResultDynError<()> {
+      let db_dir_path = test_db_dir(function_name!());
       let _dir_cleaner = DirCleaner {
         dir: db_dir_path.clone(),
       };
@@ -204,6 +210,43 @@ mod test {
         watchlists.get(0).unwrap().id.as_ref().unwrap(),
         "hey-ho-test-watchlist"
       );
+
+      return Ok(());
+    }
+
+    #[test]
+    fn it_should_add_to_watchlist() -> ResultDynError<()> {
+      let db_dir_path = test_db_dir(function_name!());
+      let _dir_cleaner = DirCleaner {
+        dir: db_dir_path.clone(),
+      };
+      let mut storage = test::reload::create_new(db_dir_path)?;
+      let watchlist = Watchlist {
+        id: None,
+        name: String::from("hey ho test watchlist"),
+        tasks: vec![],
+      };
+
+      let mut task_1: Task = Faker.fake();
+      task_1.id = "foo".to_owned();
+
+      let mut task_2: Task = Faker.fake();
+      task_2.id = "Bar".to_owned();
+
+      let watchlist = storage.create_watchlist(&watchlist)?;
+      let watchlist_id = watchlist.id.unwrap();
+      storage.add_to_watchlist(&watchlist_id, &task_1)?;
+      storage.add_to_watchlist(&watchlist_id, &task_2)?;
+
+      let watchlist = storage.get_watchlist_by_id(&watchlist_id)?;
+
+      assert!(watchlist.is_some());
+
+      let tasks: Vec<Task> = watchlist.unwrap().tasks;
+
+      assert_eq!(tasks.len(), 2);
+      assert_eq!(tasks.get(0).unwrap().id, "foo");
+      assert_eq!(tasks.get(1).unwrap().id, "Bar");
 
       return Ok(());
     }
