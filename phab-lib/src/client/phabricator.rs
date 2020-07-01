@@ -57,7 +57,7 @@ impl PhabricatorClient {
   /// This is to cover case when you copy-paste the phabricator id from url,
   /// e.g. yourphabhost.com/T1234
   /// ```
-  /// # use lib::client::phabricator::PhabricatorClient;
+  /// # use phab_lib::client::phabricator::PhabricatorClient;
   ///
   /// let phabricator_id  = PhabricatorClient::clean_id("T1234");
   /// assert_eq!(phabricator_id, "1234");

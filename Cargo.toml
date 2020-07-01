@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+  "phab-lib",
   "phab",
-  "phab-grpc"
+  "phab-grpc",
 ]

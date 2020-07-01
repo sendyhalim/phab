@@ -6,9 +6,9 @@ use clap::ArgMatches;
 use clap::SubCommand;
 use env_logger;
 
-use lib::client::phabricator::CertIdentityConfig;
-use lib::client::phabricator::PhabricatorClient;
-use lib::dto::TaskFamily;
+use phab_lib::client::phabricator::CertIdentityConfig;
+use phab_lib::client::phabricator::PhabricatorClient;
+use phab_lib::dto::TaskFamily;
 
 type ResultDynError<T> = Result<T, Box<dyn Error>>;
 
