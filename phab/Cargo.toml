@@ -19,7 +19,7 @@ license-file = "../license"
 clap = { version = "2.33" }
 env_logger = { version = "0.7.1" }
 failure = { version = "0.1.7" }
-phab-lib = { version = "0.0.1", path = "../phab-lib/" }
+phab-lib = { version = "0.1", path = "../phab-lib/" }
 tokio = { version = "0.2", features = ["full"] }
 
 [build-dependencies]

@@ -118,10 +118,28 @@ impl PhabricatorClient {
 
 impl PhabricatorClient {
   pub async fn get_user_by_phid(&self, user_phid: &str) -> ResultDynError<Option<User>> {
-    let form: Vec<(String, &str)> = vec![
-      ("api.token".to_owned(), self.api_token.as_str()),
-      ("constraints[phids][0]".to_owned(), user_phid),
-    ];
+    return self
+      .get_users_by_phids(vec![user_phid])
+      .await
+      .map(|users| users.get(0).map(ToOwned::to_owned));
+  }
+
+  pub async fn get_task_by_id(&self, task_id: &str) -> ResultDynError<Option<Task>> {
+    return self
+      .get_tasks_by_ids(vec![task_id])
+      .await
+      .map(|tasks| tasks.get(0).map(ToOwned::to_owned));
+  }
+
+  pub async fn get_users_by_phids(&self, user_phids: Vec<&str>) -> ResultDynError<Vec<User>> {
+    let mut form: Vec<(String, &str)> = vec![("api.token".to_owned(), self.api_token.as_str())];
+
+    for i in 0..user_phids.len() {
+      let key = format!("constraints[phids][{}]", i);
+      let user_phid = user_phids.get(i).unwrap();
+
+      form.push((key, user_phid));
+    }
 
     let url = format!("{}/api/user.search", self.host);
 
@@ -141,19 +159,17 @@ impl PhabricatorClient {
 
     let body: Value = serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
 
-    if let Value::Array(users) = &body["result"]["data"] {
-      if users.is_empty() {
-        return Ok(None);
+    if let Value::Array(users_json) = &body["result"]["data"] {
+      if users_json.is_empty() {
+        return Ok(vec![]);
       }
 
-      let user_json = users.get(0);
-
-      log::debug!("Parsing {:?}", user_json);
+      log::debug!("Parsing {:?}", users_json);
 
       // We only have 1 possible assignment
-      let user = User::from_json(user_json.unwrap());
+      let users: Vec<User> = users_json.iter().map(User::from_json).collect();
 
-      return Ok(Some(user));
+      return Ok(users);
     } else {
       return Err(
         ErrorType::ParseError {
@@ -164,14 +180,20 @@ impl PhabricatorClient {
     }
   }
 
-  pub async fn get_task_by_id(&self, task_id: &str) -> ResultDynError<Option<Task>> {
-    let form: Vec<(String, &str)> = vec![
+  pub async fn get_tasks_by_ids(&self, task_ids: Vec<&str>) -> ResultDynError<Vec<Task>> {
+    let mut form: Vec<(String, &str)> = vec![
       ("api.token".to_owned(), self.api_token.as_str()),
-      ("constraints[ids][0]".to_owned(), task_id),
       ("order".to_owned(), "oldest"),
       ("attachments[columns]".to_owned(), "true"),
       ("attachments[projects]".to_owned(), "true"),
     ];
+
+    for i in 0..task_ids.len() {
+      let key = format!("constraints[ids][{}]", i);
+      let task_id = PhabricatorClient::clean_id(task_ids.get(i).unwrap());
+
+      form.push((key, task_id));
+    }
 
     let url = format!("{}/api/maniphest.search", self.host);
 
@@ -191,19 +213,17 @@ impl PhabricatorClient {
 
     let body: Value = serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
 
-    if let Value::Array(tasks) = &body["result"]["data"] {
-      if tasks.is_empty() {
-        return Ok(None);
+    if let Value::Array(tasks_json) = &body["result"]["data"] {
+      if tasks_json.is_empty() {
+        return Ok(vec![]);
       }
 
-      let task_json = tasks.get(0);
-
-      log::debug!("Parsing {:?}", task_json);
+      log::debug!("Parsing {:?}", tasks_json);
 
       // We only have 1 possible assignment
-      let task = Task::from_json(task_json.unwrap());
+      let tasks: Vec<Task> = tasks_json.iter().map(Task::from_json).collect();
 
-      return Ok(Some(task));
+      return Ok(tasks);
     } else {
       return Err(
         ErrorType::ParseError {
@@ -214,7 +234,7 @@ impl PhabricatorClient {
     }
   }
 
-  pub fn get_tasks<'a>(
+  pub fn get_child_tasks<'a>(
     &'a self,
     parent_task_ids: Vec<&'a str>,
   ) -> BoxFuture<'a, ResultDynError<Vec<TaskFamily>>> {
@@ -268,7 +288,7 @@ impl PhabricatorClient {
               let parent_task = Task::from_json(&v);
 
               let children = self
-                .get_tasks(vec![parent_task.id.as_str()])
+                .get_child_tasks(vec![parent_task.id.as_str()])
                 .await
                 .map_err(|err| {
                   return ErrorType::FetchSubTasksError {
