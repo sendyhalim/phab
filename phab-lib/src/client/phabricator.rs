@@ -9,6 +9,7 @@ use reqwest::ClientBuilder as HttpClientBuilder;
 use reqwest::Identity;
 use serde_json::Value;
 
+use crate::client::config::PhabricatorClientConfig;
 use crate::dto::Task;
 use crate::dto::TaskFamily;
 use crate::dto::User;
@@ -18,11 +19,6 @@ pub struct PhabricatorClient {
   http: HttpClient,
   host: String,
   api_token: String,
-}
-
-pub struct CertIdentityConfig<'a> {
-  pub pkcs12_path: &'a str,
-  pub pkcs12_password: &'a str,
 }
 
 #[derive(Debug, Clone, Fail)]
@@ -66,20 +62,21 @@ impl PhabricatorClient {
     return id.trim_start_matches('T');
   }
 
-  pub fn new(
-    host: &str,
-    api_token: &str,
-    cert_identity_config: Option<CertIdentityConfig>,
-  ) -> ResultDynError<PhabricatorClient> {
+  pub fn new(config: PhabricatorClientConfig) -> ResultDynError<PhabricatorClient> {
     let mut http_client_builder = Ok(HttpClientBuilder::new());
+    let PhabricatorClientConfig {
+      host,
+      api_token,
+      cert_identity_config,
+    } = config;
 
     let cert_identity: Option<Result<_, _>> = cert_identity_config.map(|config| {
-      return fs::read(config.pkcs12_path)
+      return fs::read(&config.pkcs12_path)
         .map_err(|err| ErrorType::FailToConfigureHttpClient {
           message: err.to_string(),
         })
         .and_then(|bytes| {
-          return Identity::from_pkcs12_der(&bytes, config.pkcs12_password).map_err(|err| {
+          return Identity::from_pkcs12_der(&bytes, &config.pkcs12_password).map_err(|err| {
             ErrorType::CertificateIdentityError {
               pkcs12_path: String::from(config.pkcs12_path),
               message: err.to_string(),
