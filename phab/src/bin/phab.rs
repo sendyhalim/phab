@@ -111,12 +111,19 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let phabricator = PhabricatorClient::new(host, api_token, cert_identity_config)
       .map_err(|failure_error| failure_error.compat())?;
 
-    let child_tasks = phabricator.get_tasks(vec![parent_task_id]).await?;
+    let task_family = phabricator.get_task_family(parent_task_id).await?;
+
+    if task_family.is_none() {
+      println!("Could not find task {}", parent_task_id);
+    }
+
+    // Just for printing purposes
+    let task_families = vec![task_family.unwrap()];
 
     if print_json {
-      println!("{}", TaskFamily::json_string(&child_tasks)?);
+      println!("{}", TaskFamily::json_string(&task_families)?);
     } else {
-      print_tasks(&child_tasks, 0);
+      print_tasks(&task_families, 0);
     }
   }
 

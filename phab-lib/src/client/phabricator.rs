@@ -234,6 +234,24 @@ impl PhabricatorClient {
     }
   }
 
+  pub async fn get_task_family(&self, root_task_id: &str) -> ResultDynError<Option<TaskFamily>> {
+    let parent_task = self.get_task_by_id(root_task_id).await?;
+
+    if parent_task.is_none() {
+      return Ok(None);
+    }
+
+    let parent_task = parent_task.unwrap();
+
+    let child_tasks = self.get_child_tasks(vec![root_task_id]).await?;
+    let task_family = TaskFamily {
+      parent_task,
+      children: child_tasks,
+    };
+
+    return Ok(Some(task_family));
+  }
+
   pub fn get_child_tasks<'a>(
     &'a self,
     parent_task_ids: Vec<&'a str>,
