@@ -1,16 +1,12 @@
-use std::error::Error;
-
 use clap::App as Cli;
 use clap::Arg;
 use clap::ArgMatches;
 use clap::SubCommand;
 use env_logger;
 
-use phab_lib::client::phabricator::CertIdentityConfig;
+use lib::types::ResultDynError;
 use phab_lib::client::phabricator::PhabricatorClient;
 use phab_lib::dto::TaskFamily;
-
-type ResultDynError<T> = Result<T, Box<dyn Error>>;
 
 #[macro_use]
 extern crate failure;
@@ -44,32 +40,10 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
     .required(true)
     .help("task id");
 
-  let api_token_arg = Arg::with_name("api_token")
-    .takes_value(true)
-    .required(true)
-    .long("api-token")
-    .help("api token");
-
-  let host_arg = Arg::with_name("host")
-    .takes_value(true)
-    .required(true)
-    .long("host")
-    .help("host");
-
   let print_json = Arg::with_name("print_json")
     .takes_value(false)
     .long("print-json")
     .help("Set if you want to print json");
-
-  let pkcs12_path = Arg::with_name("pkcs12_path")
-    .takes_value(true)
-    .long("pkcs12-path")
-    .help("pkcs12 path");
-
-  let pkcs12_password = Arg::with_name("pkcs12_password")
-    .takes_value(true)
-    .long("pkcs12-password")
-    .help("pkcs12 password");
 
   return SubCommand::with_name("task")
     .setting(clap::AppSettings::ArgRequiredElseHelp)
@@ -78,38 +52,20 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
       SubCommand::with_name("detail")
         .about("View task detail")
         .arg(task_id_arg)
-        .arg(&api_token_arg)
-        .arg(&host_arg)
-        .arg(&pkcs12_path)
-        .arg(&pkcs12_password)
         .arg(&print_json),
     );
 }
 
 async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
+  let home_dir = std::env::var("HOME").unwrap();
+  let config = lib::config::parse_from_setting_path(format!("{}/.phab", home_dir))?;
+
   if let Some(task_detail_cli) = cli.subcommand_matches("detail") {
     let parent_task_id = task_detail_cli.value_of("task_id").unwrap();
-    let api_token = task_detail_cli.value_of("api_token").unwrap();
-    let host = task_detail_cli.value_of("host").unwrap();
-    let pkcs12_path = task_detail_cli.value_of("pkcs12_path");
-    let pkcs12_password = task_detail_cli.value_of("pkcs12_password");
     let print_json = task_detail_cli.is_present("print_json");
 
-    if pkcs12_path.is_some() && pkcs12_password.is_none() {
-      return Err(Box::new(
-        format_err!("pkcs12-password must be set!").compat(),
-      ));
-    }
-
-    let cert_identity_config = pkcs12_path.map(|pkcs12_path| {
-      return CertIdentityConfig {
-        pkcs12_path,
-        pkcs12_password: pkcs12_password.unwrap(),
-      };
-    });
-
-    let phabricator = PhabricatorClient::new(host, api_token, cert_identity_config)
-      .map_err(|failure_error| failure_error.compat())?;
+    let phabricator =
+      PhabricatorClient::new(config).map_err(|failure_error| failure_error.compat())?;
 
     let task_family = phabricator.get_task_family(parent_task_id).await?;
 
