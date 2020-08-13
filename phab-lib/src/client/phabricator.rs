@@ -166,6 +166,8 @@ impl PhabricatorClient {
       // We only have 1 possible assignment
       let users: Vec<User> = users_json.iter().map(User::from_json).collect();
 
+      log::debug!("Parsed {:?}", users);
+
       return Ok(users);
     } else {
       return Err(
@@ -219,6 +221,8 @@ impl PhabricatorClient {
 
       // We only have 1 possible assignment
       let tasks: Vec<Task> = tasks_json.iter().map(Task::from_json).collect();
+
+      log::debug!("Parsed {:?}", tasks);
 
       return Ok(tasks);
     } else {
