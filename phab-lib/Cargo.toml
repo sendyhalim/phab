@@ -1,6 +1,6 @@
 [package]
 name = "phab-lib"
-version = "0.2.0"
+version = "0.2.2"
 authors = ["Sendy Halim <sendyhalim93@gmail.com>"]
 edition = "2018"
 description = """\
@@ -23,6 +23,6 @@ tokio = { version = "0.2", features = ["full"] }
 futures = { version = "0.3" }
 failure = { version = "0.1.7" }
 log = { version = "0.4.8" }
-fake = { version = "2.2", features = ["derive", "chrono"] }
-rand = { version = "0.7" }
+fake = { version = "2.4", features = ["derive", "chrono"] }
+rand = { version = "0.8" }
 slugify = { version = "0.1.0" }
