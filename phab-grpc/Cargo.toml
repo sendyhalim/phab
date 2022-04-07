@@ -18,7 +18,7 @@ license-file = "../license"
 [dependencies]
 clap = { version = "2.33" }
 env_logger = { version = "0.7.1" }
-failure = { version = "0.1.7" }
+anyhow = { version = "1.0" }
 futures = { version = "0.3" }
 log = { version = "0.4.8" }
 prost = { version = "0.6.1" }

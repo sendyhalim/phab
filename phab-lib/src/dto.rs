@@ -1,10 +1,11 @@
+use anyhow::Error;
 use fake::Dummy;
 use fake::Fake;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::types::ResultDynError;
+use crate::types::ResultAnyError;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TaskFamily {
@@ -13,8 +14,8 @@ pub struct TaskFamily {
 }
 
 impl TaskFamily {
-  pub fn json_string(task_families: &[TaskFamily]) -> ResultDynError<String> {
-    return serde_json::to_string(task_families).map_err(failure::Error::from);
+  pub fn json_string(task_families: &[TaskFamily]) -> ResultAnyError<String> {
+    return serde_json::to_string(task_families).map_err(Error::new);
   }
 }
 

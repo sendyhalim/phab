@@ -1,6 +1,6 @@
 use std::fs;
 
-use failure::Fail;
+use anyhow::Error;
 use futures::future;
 use futures::future::BoxFuture;
 use futures::future::FutureExt;
@@ -13,7 +13,7 @@ use crate::client::config::PhabricatorClientConfig;
 use crate::dto::Task;
 use crate::dto::TaskFamily;
 use crate::dto::User;
-use crate::types::ResultDynError;
+use crate::types::ResultAnyError;
 
 pub struct PhabricatorClient {
   http: HttpClient,
@@ -21,30 +21,27 @@ pub struct PhabricatorClient {
   api_token: String,
 }
 
-#[derive(Debug, Clone, Fail)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ErrorType {
-  #[fail(
-    display = "Certificate identity path: {}, error: {}",
-    pkcs12_path, message
-  )]
+  #[error("Certificate identity path: {pkcs12_path:?}, error: {message:?}")]
   CertificateIdentityError {
     pkcs12_path: String,
     message: String,
   },
 
-  #[fail(display = "Fail to configure http client, error: {}", message)]
+  #[error("Fail to configure http client, error: {message:?}")]
   FailToConfigureHttpClient { message: String },
 
-  #[fail(display = "Validation error: {}", message)]
+  #[error("Validation error: {message:?}")]
   ValidationError { message: String },
 
-  #[fail(display = "Fetch sub tasks error: {}", message)]
+  #[error("Fetch sub tasks error: {message:?}")]
   FetchSubTasksError { message: String },
 
-  #[fail(display = "Fetch task error: {}", message)]
+  #[error("Fetch task error: {message:?}")]
   FetchTaskError { message: String },
 
-  #[fail(display = "Parse error: {}", message)]
+  #[error("Parse error: {message:?}")]
   ParseError { message: String },
 }
 
@@ -62,7 +59,7 @@ impl PhabricatorClient {
     return id.trim_start_matches('T');
   }
 
-  pub fn new(config: PhabricatorClientConfig) -> ResultDynError<PhabricatorClient> {
+  pub fn new(config: PhabricatorClientConfig) -> ResultAnyError<PhabricatorClient> {
     let mut http_client_builder = Ok(HttpClientBuilder::new());
     let PhabricatorClientConfig {
       host,
@@ -102,7 +99,7 @@ impl PhabricatorClient {
             message: err.to_string(),
           })
       })
-      .map_err(failure::Error::from)
+      .map_err(Error::new)
       .map(|http_client| {
         return PhabricatorClient {
           http: http_client,
@@ -114,21 +111,21 @@ impl PhabricatorClient {
 }
 
 impl PhabricatorClient {
-  pub async fn get_user_by_phid(&self, user_phid: &str) -> ResultDynError<Option<User>> {
+  pub async fn get_user_by_phid(&self, user_phid: &str) -> ResultAnyError<Option<User>> {
     return self
       .get_users_by_phids(vec![user_phid])
       .await
       .map(|users| users.get(0).map(ToOwned::to_owned));
   }
 
-  pub async fn get_task_by_id(&self, task_id: &str) -> ResultDynError<Option<Task>> {
+  pub async fn get_task_by_id(&self, task_id: &str) -> ResultAnyError<Option<Task>> {
     return self
       .get_tasks_by_ids(vec![task_id])
       .await
       .map(|tasks| tasks.get(0).map(ToOwned::to_owned));
   }
 
-  pub async fn get_users_by_phids(&self, user_phids: Vec<&str>) -> ResultDynError<Vec<User>> {
+  pub async fn get_users_by_phids(&self, user_phids: Vec<&str>) -> ResultAnyError<Vec<User>> {
     let mut form: Vec<(String, &str)> = vec![("api.token".to_owned(), self.api_token.as_str())];
 
     for i in 0..user_phids.len() {
@@ -148,13 +145,13 @@ impl PhabricatorClient {
       .form(&form)
       .send()
       .await
-      .map_err(failure::Error::from)?;
+      .map_err(Error::new)?;
 
-    let response_text = result.text().await.map_err(failure::Error::from)?;
+    let response_text = result.text().await.map_err(Error::new)?;
 
     log::debug!("Response {}", response_text);
 
-    let body: Value = serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
+    let body: Value = serde_json::from_str(response_text.as_str()).map_err(Error::new)?;
 
     if let Value::Array(users_json) = &body["result"]["data"] {
       if users_json.is_empty() {
@@ -179,7 +176,7 @@ impl PhabricatorClient {
     }
   }
 
-  pub async fn get_tasks_by_ids(&self, task_ids: Vec<&str>) -> ResultDynError<Vec<Task>> {
+  pub async fn get_tasks_by_ids(&self, task_ids: Vec<&str>) -> ResultAnyError<Vec<Task>> {
     let mut form: Vec<(String, &str)> = vec![
       ("api.token".to_owned(), self.api_token.as_str()),
       ("order".to_owned(), "oldest"),
@@ -204,13 +201,13 @@ impl PhabricatorClient {
       .form(&form)
       .send()
       .await
-      .map_err(failure::Error::from)?;
+      .map_err(Error::new)?;
 
-    let response_text = result.text().await.map_err(failure::Error::from)?;
+    let response_text = result.text().await.map_err(Error::new)?;
 
     log::debug!("Response {}", response_text);
 
-    let body: Value = serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
+    let body: Value = serde_json::from_str(response_text.as_str()).map_err(Error::new)?;
 
     if let Value::Array(tasks_json) = &body["result"]["data"] {
       if tasks_json.is_empty() {
@@ -235,7 +232,7 @@ impl PhabricatorClient {
     }
   }
 
-  pub async fn get_task_family(&self, root_task_id: &str) -> ResultDynError<Option<TaskFamily>> {
+  pub async fn get_task_family(&self, root_task_id: &str) -> ResultAnyError<Option<TaskFamily>> {
     let parent_task = self.get_task_by_id(root_task_id).await?;
 
     if parent_task.is_none() {
@@ -256,7 +253,7 @@ impl PhabricatorClient {
   pub fn get_child_tasks<'a>(
     &'a self,
     parent_task_ids: Vec<&'a str>,
-  ) -> BoxFuture<'a, ResultDynError<Vec<TaskFamily>>> {
+  ) -> BoxFuture<'a, ResultAnyError<Vec<TaskFamily>>> {
     return async move {
       if parent_task_ids.is_empty() {
         return Err(
@@ -290,19 +287,18 @@ impl PhabricatorClient {
         .form(&form)
         .send()
         .await
-        .map_err(failure::Error::from)?;
+        .map_err(Error::new)?;
 
-      let response_text = result.text().await.map_err(failure::Error::from)?;
+      let response_text = result.text().await.map_err(Error::new)?;
 
       log::debug!("Response {}", response_text);
 
-      let body: Value =
-        serde_json::from_str(response_text.as_str()).map_err(failure::Error::from)?;
+      let body: Value = serde_json::from_str(response_text.as_str()).map_err(Error::new)?;
 
       if let Value::Array(tasks_json) = &body["result"]["data"] {
-        let tasks: Vec<BoxFuture<ResultDynError<TaskFamily>>> = tasks_json
+        let tasks: Vec<BoxFuture<ResultAnyError<TaskFamily>>> = tasks_json
           .iter()
-          .map(|v: &Value| -> BoxFuture<ResultDynError<TaskFamily>> {
+          .map(|v: &Value| -> BoxFuture<ResultAnyError<TaskFamily>> {
             return async move {
               let parent_task = Task::from_json(&v);
 

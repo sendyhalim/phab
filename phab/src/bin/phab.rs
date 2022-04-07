@@ -4,19 +4,16 @@ use clap::ArgMatches;
 use clap::SubCommand;
 use env_logger;
 
-use lib::types::ResultDynError;
+use lib::types::ResultAnyError;
 use phab_lib::client::phabricator::PhabricatorClient;
 use phab_lib::dto::TaskFamily;
-
-#[macro_use]
-extern crate failure;
 
 pub mod built_info {
   include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
 #[tokio::main]
-pub async fn main() -> ResultDynError<()> {
+pub async fn main() -> ResultAnyError<()> {
   env_logger::init();
 
   let cli = Cli::new("phab")
@@ -56,7 +53,7 @@ fn task_cmd<'a, 'b>() -> Cli<'a, 'b> {
     );
 }
 
-async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
+async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultAnyError<()> {
   let home_dir = std::env::var("HOME").unwrap();
   let config = lib::config::parse_from_setting_path(format!("{}/.phab", home_dir))?;
 
@@ -64,8 +61,7 @@ async fn handle_task_cli(cli: &ArgMatches<'_>) -> ResultDynError<()> {
     let parent_task_id = task_detail_cli.value_of("task_id").unwrap();
     let print_json = task_detail_cli.is_present("print_json");
 
-    let phabricator =
-      PhabricatorClient::new(config).map_err(|failure_error| failure_error.compat())?;
+    let phabricator = PhabricatorClient::new(config)?;
 
     let task_family = phabricator.get_task_family(parent_task_id).await?;
 

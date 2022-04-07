@@ -1,7 +1,7 @@
 [package]
 name = "phab"
 authors = ["Sendy Halim <sendyhalim93@gmail.com>"]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2018"
 description = """\
   CLI utility client for phabricator (https://www.phacility.com/phabricator)
@@ -18,10 +18,12 @@ license-file = "../license"
 [dependencies]
 clap = { version = "2.33" }
 env_logger = { version = "0.7.1" }
-failure = { version = "0.1.7" }
-phab-lib = { version = "0.2", path = "../phab-lib/" }
+anyhow = { version = "1.0" }
+thiserror = { version = "1.0" }
+phab-lib = { version = "0.3", path = "../phab-lib/" }
 tokio = { version = "0.2", features = ["full"] }
-config = { version = "0.10" }
+config = { version = "0.13" }
+deser-hjson = { version = "1.0" }
 
 [build-dependencies]
 built = "0.4"

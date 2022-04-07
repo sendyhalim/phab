@@ -3,13 +3,14 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use failure::Fail;
+use anyhow::Error;
 use slugify::slugify;
+use thiserror::Error;
 
 use crate::dto::Task;
 use crate::dto::Watchlist;
 use crate::storage::storage::PhabStorage;
-use crate::types::ResultDynError;
+use crate::types::ResultAnyError;
 
 type Table = HashMap<String, Watchlist>;
 type FileDB = HashMap<String, Table>;
@@ -20,7 +21,7 @@ pub struct PhabStorageFilesystem {
 }
 
 impl PhabStorageFilesystem {
-  pub fn new(filepath: impl AsRef<Path>) -> ResultDynError<PhabStorageFilesystem> {
+  pub fn new(filepath: impl AsRef<Path>) -> ResultAnyError<PhabStorageFilesystem> {
     let mut storage = PhabStorageFilesystem {
       db_content: HashMap::new(),
       filepath: PathBuf::from(filepath.as_ref()),
@@ -40,7 +41,7 @@ impl PhabStorageFilesystem {
       .or_insert(HashMap::new());
   }
 
-  fn reload(&mut self) -> ResultDynError<()> {
+  fn reload(&mut self) -> ResultAnyError<()> {
     if !self.filepath.exists() {
       let _ = self.watchlist_table();
 
@@ -53,7 +54,7 @@ impl PhabStorageFilesystem {
     return Ok(());
   }
 
-  fn persist(&self) -> ResultDynError<()> {
+  fn persist(&self) -> ResultAnyError<()> {
     // Create db file if not exist
     if !self.filepath.exists() {
       let mut cloned_filepath = self.filepath.clone();
@@ -70,14 +71,14 @@ impl PhabStorageFilesystem {
   }
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 enum PhabStorageFilesystemError {
-  #[fail(display = "PhabStorageFilesystemError err: {}", message)]
+  #[error("PhabStorageFilesystemError err: {message:?}")]
   QueryError { message: String },
 }
 
 impl PhabStorageFilesystemError {
-  fn query_error(message: &str) -> failure::Error {
+  fn query_error(message: &str) -> Error {
     return PhabStorageFilesystemError::QueryError {
       message: message.to_owned(),
     }
@@ -86,7 +87,7 @@ impl PhabStorageFilesystemError {
 }
 
 impl PhabStorage for PhabStorageFilesystem {
-  fn add_to_watchlist(&mut self, watchlist_id: &str, task: &Task) -> ResultDynError<()> {
+  fn add_to_watchlist(&mut self, watchlist_id: &str, task: &Task) -> ResultAnyError<()> {
     self
       .watchlist_table()
       .get_mut(watchlist_id)
@@ -99,7 +100,7 @@ impl PhabStorage for PhabStorageFilesystem {
     return Ok(());
   }
 
-  fn create_watchlist(&mut self, watchlist: &Watchlist) -> ResultDynError<Watchlist> {
+  fn create_watchlist(&mut self, watchlist: &Watchlist) -> ResultAnyError<Watchlist> {
     let watchlists = self.db_content.get_mut("watchlists").unwrap();
     let watchlist_id = slugify!(&watchlist.name);
     let mut watchlist = watchlist.clone();
@@ -112,13 +113,13 @@ impl PhabStorage for PhabStorageFilesystem {
     return Ok(watchlist);
   }
 
-  fn get_watchlists(&mut self) -> ResultDynError<Vec<Watchlist>> {
+  fn get_watchlists(&mut self) -> ResultAnyError<Vec<Watchlist>> {
     let watchlists: Vec<Watchlist> = self.watchlist_table().values().cloned().collect();
 
     return Ok(watchlists);
   }
 
-  fn get_watchlist_by_id(&mut self, watchlist_id: &str) -> ResultDynError<Option<Watchlist>> {
+  fn get_watchlist_by_id(&mut self, watchlist_id: &str) -> ResultAnyError<Option<Watchlist>> {
     let watchlist = self.watchlist_table().get(watchlist_id).map(Clone::clone);
 
     return Ok(watchlist);
@@ -147,7 +148,7 @@ mod test {
     use fake::Fake;
     use fake::Faker;
 
-    fn create_new(db_dir_path: PathBuf) -> ResultDynError<PhabStorageFilesystem> {
+    fn create_new(db_dir_path: PathBuf) -> ResultAnyError<PhabStorageFilesystem> {
       let mut storage = PhabStorageFilesystem {
         db_content: HashMap::new(),
         filepath: PathBuf::from(format!(
@@ -167,7 +168,7 @@ mod test {
     }
 
     #[test]
-    fn it_should_create_dir_and_load_data_for_first_time() -> ResultDynError<()> {
+    fn it_should_create_dir_and_load_data_for_first_time() -> ResultAnyError<()> {
       let db_dir_path = test_db_dir(function_name!());
       let _dir_cleaner = DirCleaner {
         dir: db_dir_path.clone(),
@@ -182,7 +183,7 @@ mod test {
     }
 
     #[test]
-    fn it_should_insert_data() -> ResultDynError<()> {
+    fn it_should_insert_data() -> ResultAnyError<()> {
       let db_dir_path = test_db_dir(function_name!());
       let _dir_cleaner = DirCleaner {
         dir: db_dir_path.clone(),
@@ -215,7 +216,7 @@ mod test {
     }
 
     #[test]
-    fn it_should_add_to_watchlist() -> ResultDynError<()> {
+    fn it_should_add_to_watchlist() -> ResultAnyError<()> {
       let db_dir_path = test_db_dir(function_name!());
       let _dir_cleaner = DirCleaner {
         dir: db_dir_path.clone(),
