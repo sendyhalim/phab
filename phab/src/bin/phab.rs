@@ -99,7 +99,7 @@ fn print_tasks(task_families: &[TaskFamily], indentation_level: usize) {
       .board
       .as_ref()
       .map(|b| b.name.clone())
-      .or({ Some(String::from("NoBoard")) })
+      .or(Some(String::from("NoBoard")))
       .unwrap();
 
     println!(

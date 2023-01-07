@@ -29,19 +29,19 @@ pub enum ErrorType {
     message: String,
   },
 
-  #[error("Fail to configure http client, error: {message:?}")]
+  #[error("Fail to configure http client, error: {message}")]
   FailToConfigureHttpClient { message: String },
 
-  #[error("Validation error: {message:?}")]
+  #[error("Validation error: {message}")]
   ValidationError { message: String },
 
-  #[error("Fetch sub tasks error: {message:?}")]
+  #[error("Fetch sub tasks error: {message}")]
   FetchSubTasksError { message: String },
 
-  #[error("Fetch task error: {message:?}")]
+  #[error("Fetch task error: {message}")]
   FetchTaskError { message: String },
 
-  #[error("Parse error: {message:?}")]
+  #[error("Parse error: {message}")]
   ParseError { message: String },
 }
 
@@ -70,7 +70,7 @@ impl PhabricatorClient {
     let cert_identity: Option<Result<_, _>> = cert_identity_config.map(|config| {
       return fs::read(&config.pkcs12_path)
         .map_err(|err| ErrorType::FailToConfigureHttpClient {
-          message: err.to_string(),
+          message: format!("Failed to read pkcs12 from {}, {}", config.pkcs12_path, err),
         })
         .and_then(|bytes| {
           return Identity::from_pkcs12_der(&bytes, &config.pkcs12_password).map_err(|err| {
@@ -353,5 +353,38 @@ impl PhabricatorClient {
       }
     }
     .boxed();
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use crate::client::config::CertIdentityConfig;
+
+  fn dummy_config() -> PhabricatorClientConfig {
+    return PhabricatorClientConfig {
+      host: "http://localhost".into(),
+      api_token: "foo".into(),
+      cert_identity_config: None,
+    };
+  }
+
+  #[test]
+  fn test_create_new_client_with_invalid_pkcs12_path() {
+    let mut config = dummy_config();
+    config.cert_identity_config = Some(CertIdentityConfig {
+      pkcs12_path: "/path/to/invalid/config".into(),
+      pkcs12_password: "testpassword".into(),
+    });
+
+    let maybe_client = PhabricatorClient::new(config);
+
+    assert!(maybe_client.is_err());
+
+    let err = maybe_client.err().unwrap();
+
+    assert!(err
+      .to_string()
+      .contains("Failed to read pkcs12 from /path/to/invalid/config"));
   }
 }
