@@ -1243,7 +1243,7 @@ dependencies = [
  "env_logger",
  "phab-lib",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 1.17.0",
 ]
 
 [[package]]
